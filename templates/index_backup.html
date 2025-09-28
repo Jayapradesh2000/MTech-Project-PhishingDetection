@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Phishing Detection Tool</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; }
+    input[type="text"] { width: 80%; padding: 8px; }
+    button { padding: 8px 12px; }
+    .safe { color: green; font-weight: bold; }
+    .phish { color: red; font-weight: bold; }
+    pre { background:#f4f4f4; padding:10px; }
+  </style>
+</head>
+<body>
+  <h1>Phishing Detection Tool</h1>
+  <form method="post" action="/predict">
+    <label for="url">Enter URL:</label><br>
+    <input type="text" id="url" name="url" placeholder="https://example.com/login" required>
+    <button type="submit">Predict</button>
+  </form>
+
+  {% if result %}
+    <hr>
+    <h2>Result</h2>
+    <p>Prediction:
+      {% if result.prediction == 'phishing' %}
+        <span class="phish">Phishing ❌</span>
+      {% else %}
+        <span class="safe">Legitimate ✅</span>
+      {% endif %}
+    </p>
+    <p>Confidence: {{ result.confidence }}</p>
+    <h3>Extracted features</h3>
+    <pre>{{ result.features }}</pre>
+  {% endif %}
+</body>
+</html>

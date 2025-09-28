@@ -1,0 +1,128 @@
+Set-Content -Path .\templates\index.html -Value @'
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Phishing Detection Tool</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width:900px; margin:30px auto; padding:0 20px; }
+    h1 { color:#333; }
+    .input-row { margin: 16px 0; }
+    input[type="text"] { width: 78%; padding:8px; font-size:14px; }
+    button { padding:8px 12px; font-size:14px; cursor:pointer; }
+    .result { margin-top:18px; padding:12px; border-radius:8px; background:#f6f8fa; }
+    .safe { color: #155724; background:#d4edda; padding:8px; border-radius:6px; display:inline-block; }
+    .phish { color: #721c24; background:#f8d7da; padding:8px; border-radius:6px; display:inline-block; }
+    .confidence-bar { height:14px; width:100%; background:#e9ecef; border-radius:8px; overflow:hidden; margin-top:8px; }
+    .confidence-fill { height:100%; width:0%; background:green; transition: width 400ms ease; }
+    .features { margin-top:10px; font-family: monospace; white-space:pre-wrap; background:#fff; padding:8px; border-radius:6px; border:1px solid #eee; }
+    .spinner { display:inline-block; width:16px; height:16px; border:3px solid #ccc; border-top-color:#333; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .history { margin-top:16px; }
+    .history li { margin-bottom:6px; font-size:13px; }
+    .note { color:#666; font-size:13px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <h1>Phishing Detection Tool</h1>
+
+  <form id="urlForm">
+    <div class="input-row">
+      <input id="urlInput" type="text" placeholder="Enter URL (e.g. https://example.com/login)" required />
+      <button id="submitBtn" type="submit">Predict</button>
+      <span id="busy" style="margin-left:10px; display:none;"><span class="spinner"></span></span>
+    </div>
+  </form>
+
+  <div id="resultArea" class="result" style="display:none;">
+    <div id="predictionLabel"></div>
+    <div class="confidence-bar" title="Confidence">
+      <div id="confidenceFill" class="confidence-fill"></div>
+    </div>
+    <div style="margin-top:8px;"><strong>Confidence:</strong> <span id="confidenceText"></span></div>
+    <h4 style="margin-top:12px">Extracted features</h4>
+    <div id="features" class="features"></div>
+  </div>
+
+  <div class="history">
+    <h4>Recent checks</h4>
+    <ul id="historyList"></ul>
+  </div>
+
+  <div class="note">This UI sends your URL to the local server at <code>/predict_json</code>. Keep the Flask app running.</div>
+
+<script>
+const form = document.getElementById('urlForm');
+const urlInput = document.getElementById('urlInput');
+const submitBtn = document.getElementById('submitBtn');
+const busy = document.getElementById('busy');
+const resultArea = document.getElementById('resultArea');
+const predictionLabel = document.getElementById('predictionLabel');
+const confidenceFill = document.getElementById('confidenceFill');
+const confidenceText = document.getElementById('confidenceText');
+const featuresDiv = document.getElementById('features');
+const historyList = document.getElementById('historyList');
+
+function setBusy(isBusy) {
+  busy.style.display = isBusy ? 'inline-block' : 'none';
+  submitBtn.disabled = isBusy;
+}
+
+function isValidURL(str) {
+  try { new URL(str); return true; } catch(e) { return false; }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = urlInput.value.trim();
+  if (!url) return alert("Please enter a URL.");
+  if (!isValidURL(url)) return alert("Please enter a valid URL (include http:// or https://).");
+
+  setBusy(true);
+  resultArea.style.display = 'none';
+
+  try {
+    const resp = await fetch('/predict_json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(txt || 'Server error');
+    }
+    const data = await resp.json();
+    // show result
+    const pred = data.prediction || 'unknown';
+    const conf = (data.confidence === null || data.confidence === undefined) ? null : Number(data.confidence);
+    predictionLabel.innerHTML = pred === 'phishing' ? '<span class="phish">Phishing ❌</span>' : '<span class="safe">Legitimate ✅</span>';
+    if (conf !== null) {
+      const pct = Math.round(conf * 100);
+      confidenceFill.style.width = pct + '%';
+      confidenceFill.style.background = conf >= 0.5 ? 'green' : '#c0392b';
+      confidenceText.innerText = (pct) + '%';
+    } else {
+      confidenceFill.style.width = '0%';
+      confidenceText.innerText = 'N/A';
+    }
+    featuresDiv.innerText = JSON.stringify(data.features || {}, null, 2);
+    resultArea.style.display = 'block';
+
+    // add to history (top)
+    const li = document.createElement('li');
+    li.innerText = `${new Date().toLocaleTimeString()} — ${url} — ${pred} ${conf !== null ? '(' + Math.round(conf*100) + '%)' : ''}`;
+    historyList.insertBefore(li, historyList.firstChild);
+    // keep history length small
+    while (historyList.children.length > 10) historyList.removeChild(historyList.lastChild);
+
+  } catch (err) {
+    alert('Error: ' + (err.message || err));
+  } finally {
+    setBusy(false);
+  }
+});
+</script>
+
+</body>
+</html>
+'@
